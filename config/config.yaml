@@ -1,0 +1,16 @@
+#yunboss的地址前缀
+yunboss:
+#api端口地址TCP端口
+apiport: 11880
+#消息sokect端口地址
+port: 11881
+#本服务器的IP地址
+ip: 192.168.1.200
+#日志文件
+log_path: /log
+#协议websocket或者字节流byte(默认)
+protocol:
+#日志保存最近天数,
+logsize: 7
+#客户端的连接数
+clientmaxsize:
