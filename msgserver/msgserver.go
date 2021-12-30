@@ -96,13 +96,18 @@ func (s *Server) Start() {
 
 func (s *Server) Handler(conn net.Conn) {
 	defer conn.Close()
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println(err)
+		}
+	}()
 
 	go s.Login(conn)
 	go s.HeartBeat(conn)
 	go s.ReceiveMsg(conn)
 
 	for {
-		var buf = make([]byte, 1024)
+		var buf = make([]byte, 4096)
 		n, err := conn.Read(buf)
 		if err != nil {
 			if err == io.EOF {
