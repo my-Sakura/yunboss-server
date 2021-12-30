@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -17,11 +18,11 @@ import (
 )
 
 type Server struct {
-	Users        *sync.Map
+	UsersByUID   *sync.Map
+	UsersByConn  *sync.Map
 	Config       *Config
 	Done         chan struct{}
 	LoginCh      chan *ClientLoginBody
-	QuitCh       chan *ClientQuitBody
 	HeartBeatCh  chan *ClientHeartBeatBody
 	ReceiveCh    chan *ClientPushBody
 	PushReturnCh chan *ServerReturnBody
@@ -54,10 +55,10 @@ func NewServer() *Server {
 	}
 	server := &Server{
 		Config:       config,
-		Users:        &sync.Map{},
+		UsersByUID:   &sync.Map{},
+		UsersByConn:  &sync.Map{},
 		Done:         make(chan struct{}),
 		LoginCh:      make(chan *ClientLoginBody),
-		QuitCh:       make(chan *ClientQuitBody),
 		HeartBeatCh:  make(chan *ClientHeartBeatBody),
 		ReceiveCh:    make(chan *ClientPushBody),
 		PushReturnCh: make(chan *ServerReturnBody),
@@ -98,13 +99,16 @@ func (s *Server) Handler(conn net.Conn) {
 
 	go s.Login(conn)
 	go s.HeartBeat(conn)
-	go s.Quit(conn)
 	go s.ReceiveMsg(conn)
 
 	for {
 		var buf = make([]byte, 1024)
 		n, err := conn.Read(buf)
 		if err != nil {
+			if err == io.EOF {
+				s.Quit(conn)
+				return
+			}
 			panic(err)
 		}
 		var readRequest struct {
@@ -121,13 +125,6 @@ func (s *Server) Handler(conn net.Conn) {
 				panic(err)
 			}
 			s.LoginCh <- loginRequest
-
-		case "quit":
-			quitRequest := &ClientQuitBody{}
-			if err = json.Unmarshal(buf[:n], quitRequest); err != nil {
-				panic(err)
-			}
-			s.QuitCh <- quitRequest
 
 		case "heartbeat":
 			heartBeatRequest := &ClientHeartBeatBody{}
@@ -168,7 +165,7 @@ func (s *Server) Login(conn net.Conn) {
 		url = "http://139.199.60.49:2180/oservice/client/login"
 	)
 	receiveData := <-s.LoginCh
-	if u, ok := s.Users.Load(receiveData.Uid); ok {
+	if u, ok := s.UsersByUID.Load(receiveData.Uid); ok {
 		user := u.(*User)
 		loginResp := &ServerLoginBody{
 			UID:    receiveData.Uid,
@@ -235,8 +232,9 @@ func (s *Server) Login(conn net.Conn) {
 		panic(err)
 	}
 
-	user := NewUser(receiveData.Uid, conn, WithStatus(Online), WithToken(loginResponse.Token))
-	s.Users.Store(user.UID, user)
+	user := NewUser(receiveData.Uid, conn, WithToken(loginResponse.Token))
+	s.UsersByUID.Store(user.UID, user)
+	s.UsersByConn.Store(conn, user)
 }
 
 func (s *Server) HeartBeat(conn net.Conn) {
@@ -249,7 +247,7 @@ func (s *Server) HeartBeat(conn net.Conn) {
 		select {
 		case receiveData := <-s.HeartBeatCh:
 			var user *User
-			if u, ok := s.Users.Load(receiveData.UID); ok {
+			if u, ok := s.UsersByUID.Load(receiveData.UID); ok {
 				user = u.(*User)
 			} else {
 				panic("load user failed")
@@ -325,13 +323,10 @@ func (s *Server) PushMsg(uid, msg, url string) error {
 	fmt.Println("push start")
 
 	var user *User
-	if u, ok := s.Users.Load(uid); ok {
+	if u, ok := s.UsersByUID.Load(uid); ok {
 		user = u.(*User)
 	} else {
 		return errors.New("load user failed")
-	}
-	if user.Status == Offline {
-		return errors.New("push failed")
 	}
 
 	req, err := json.Marshal(struct {
@@ -365,13 +360,10 @@ func (s *Server) ReceiveMsg(conn net.Conn) {
 		case receiveData := <-s.ReceiveCh:
 			fmt.Println(receiveData, "receiveData")
 			var user *User
-			if u, ok := s.Users.Load(receiveData.UID); ok {
+			if u, ok := s.UsersByUID.Load(receiveData.UID); ok {
 				user = u.(*User)
 			} else {
 				panic("load user failed")
-			}
-			if user.Status == Offline {
-				panic("push failed")
 			}
 
 			req, err := json.Marshal(struct {
@@ -419,8 +411,6 @@ func (s *Server) ReceiveMsg(conn net.Conn) {
 				panic(err)
 			}
 
-			fmt.Println(string(respBody))
-
 		case <-s.Done:
 			return
 		}
@@ -428,14 +418,12 @@ func (s *Server) ReceiveMsg(conn net.Conn) {
 }
 
 func (s *Server) Quit(conn net.Conn) {
-	fmt.Println("quit start")
 	const (
 		url = "http://139.199.60.49:2180/oservice/client/quit"
 	)
 
-	receiveData := <-s.QuitCh
 	var user *User
-	if u, ok := s.Users.Load(receiveData.UID); ok {
+	if u, ok := s.UsersByConn.Load(conn); ok {
 		user = u.(*User)
 	} else {
 		panic("load user failed")
@@ -445,13 +433,15 @@ func (s *Server) Quit(conn net.Conn) {
 		Token string `json:"token"`
 		IP    string `json:"ip"`
 	}{
-		UID:   receiveData.UID,
+		UID:   user.UID,
 		IP:    s.Config.Ip,
 		Token: user.Token,
 	})
 	if err != nil {
 		panic(err)
 	}
+	s.UsersByConn.Delete(conn)
+	s.UsersByUID.Delete(user.UID)
 	reader := bytes.NewReader(req)
 	request, err := http.NewRequest("POST", url, reader)
 	if err != nil {
@@ -466,20 +456,6 @@ func (s *Server) Quit(conn net.Conn) {
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		panic(err)
-	}
-
-	ReceiveResponse := &ServerQuitBody{}
-	if err = json.Unmarshal(respBody, &ReceiveResponse); err != nil {
-		panic(err)
-	}
-
-	ReceiveResponse.Type = "quit"
-	r, err := json.Marshal(ReceiveResponse)
-	if err != nil {
-		panic(err)
-	}
-	if _, err = user.Conn.Write(r); err != nil {
 		panic(err)
 	}
 

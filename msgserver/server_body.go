@@ -30,10 +30,3 @@ type ServerReturnBody struct {
 	Status int    `json:"status"`
 	Body   string `json:"body"`
 }
-
-type ServerQuitBody struct {
-	Type  string `json:"type"`
-	Ip    string `json:"ip"`
-	Token string `json:"token"`
-	UID   string `json:"uid"`
-}

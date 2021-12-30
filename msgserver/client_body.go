@@ -26,9 +26,3 @@ type ClientPushBody struct {
 	Token string `json:"token"`
 	Body  string `json:"body"`
 }
-
-type ClientQuitBody struct {
-	Type  string `json:"type"`
-	UID   string `json:"uid"`
-	Token string `json:"token"`
-}

@@ -6,31 +6,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type Status int
-
-const (
-	Online Status = iota
-	Offline
-)
-
-func (s Status) String() string {
-	switch s {
-	case Online:
-		return "online"
-
-	case Offline:
-		return "offline"
-	}
-
-	return ""
-}
-
 type User struct {
 	UID    string
 	Socket *websocket.Conn
 	Conn   net.Conn
 	Token  string
-	Status Status
 }
 
 type UserOption func(*User)
@@ -69,11 +49,5 @@ func WithConn(conn net.Conn) UserOption {
 func WithToken(token string) UserOption {
 	return func(user *User) {
 		user.Token = token
-	}
-}
-
-func WithStatus(status Status) UserOption {
-	return func(user *User) {
-		user.Status = status
 	}
 }

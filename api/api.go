@@ -38,7 +38,7 @@ func (m *Manager) pushMsg(c *gin.Context) {
 	}
 
 	var user *msgserver.User
-	if u, ok := m.server.Users.Load(req.UID); ok {
+	if u, ok := m.server.UsersByUID.Load(req.UID); ok {
 		user = u.(*msgserver.User)
 	} else {
 		c.JSON(http.StatusOK, gin.H{"status": 1, "msg": "client offline", "body": ""})
