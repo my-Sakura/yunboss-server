@@ -3,7 +3,6 @@ module github.com/my-Sakura/zinx
 go 1.17
 
 require (
-	github.com/aceld/zinx v1.0.0
 	github.com/gin-gonic/gin v1.7.7
 	github.com/gorilla/websocket v1.4.2
 	github.com/spf13/cobra v1.3.0

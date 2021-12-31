@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -153,19 +154,39 @@ func (s *Server) Handler(conn net.Conn) {
 			}
 			s.PushReturnCh <- serverPush
 
-		default:
-			fmt.Println("default-----------")
-			// if err = json.Unmarshal(temp[:n], loginRequest); err != nil {
-			// 	panic(err)
-			// }
+		case "stop":
+			fmt.Println("process exit")
+			if _, err := conn.Write([]byte("msgserver exit")); err != nil {
+				panic(err)
+			}
+			os.Exit(0)
 
+		case "reload":
+			config := &Config{}
+			if err := viper.Unmarshal(config); err != nil {
+				panic(err)
+			}
+			s.Config = config
+			if _, err := conn.Write([]byte("reload succeed")); err != nil {
+				panic(err)
+			}
+
+			fmt.Println("config reload succeed")
+			return
+
+		case "status":
+			if _, err := conn.Write([]byte("msgserver running")); err != nil {
+				panic(err)
+			}
+			return
+
+		default:
+			fmt.Println("debug")
 		}
 	}
 }
 
 func (s *Server) Login(conn net.Conn) {
-	fmt.Println("login start")
-
 	const (
 		url = "http://139.199.60.49:2180/oservice/client/login"
 	)
@@ -243,7 +264,6 @@ func (s *Server) Login(conn net.Conn) {
 }
 
 func (s *Server) HeartBeat(conn net.Conn) {
-	fmt.Println("heartbeat start")
 	const (
 		url = "http://139.199.60.49:2180/oservice/client/heartbeat"
 	)
@@ -325,8 +345,6 @@ func (s *Server) HeartBeat(conn net.Conn) {
 }
 
 func (s *Server) PushMsg(uid, msg, url string) error {
-	fmt.Println("push start")
-
 	var user *User
 	if u, ok := s.UsersByUID.Load(uid); ok {
 		user = u.(*User)
@@ -355,7 +373,6 @@ func (s *Server) PushMsg(uid, msg, url string) error {
 }
 
 func (s *Server) ReceiveMsg(conn net.Conn) {
-	fmt.Println("receive start")
 	const (
 		url = "http://139.199.60.49:2180/oservice/client/msg"
 	)
@@ -465,4 +482,5 @@ func (s *Server) Quit(conn net.Conn) {
 	}
 
 	fmt.Println(string(respBody))
+	fmt.Printf("user: %s exit\n", user.UID)
 }
