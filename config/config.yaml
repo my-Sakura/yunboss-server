@@ -1,9 +1,11 @@
 #yunboss的地址前缀
-yunboss:
+yunboss: 139.199.60.49:2180
 #api端口地址TCP端口
 apiport: 11880
 #消息sokect端口地址
 port: 11881
+#websocket端口
+websocket: 11882
 #本服务器的IP地址
 ip: 192.168.1.200
 #日志文件
