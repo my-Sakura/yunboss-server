@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/my-Sakura/zinx/server"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -42,7 +42,9 @@ func (w *WebSocket) Regist(r gin.IRouter) {
 func (w *WebSocket) ws(c *gin.Context) {
 	wsConn, err := wsUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("Error upgrade  websocket: %v\n", err)
+		w.server.Log.WithFields(logrus.Fields{
+			"err": err,
+		}).Errorln("Error upgrade  websocket")
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -50,7 +52,7 @@ func (w *WebSocket) ws(c *gin.Context) {
 	defer wsConn.Close()
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println(err)
+			w.server.Log.Error(err)
 		}
 	}()
 
@@ -65,13 +67,19 @@ func (w *WebSocket) ws(c *gin.Context) {
 				websocket.ErrCloseSent.Error() == err.Error() ||
 				websocket.IsCloseError(err, websocket.CloseGoingAway) {
 				w.server.WSQuit(wsConn)
-				log.Printf("%v\n", ErrWebSocketClose)
+				w.server.Log.WithFields(logrus.Fields{
+					"err":  ErrWebSocketClose,
+					"time": time.Now().Format("2006-01-02 15:04:05"),
+				}).Errorln("wsConn readMessage error")
 				return
 			}
 			if err = wsConn.WriteMessage(websocket.TextMessage, []byte("bad request")); err != nil {
 				panic(err)
 			}
-			log.Printf("Error ws read: %v\n", err)
+			w.server.Log.WithFields(logrus.Fields{
+				"err":  err,
+				"time": time.Now().Format("2006-01-02 15:04:05"),
+			}).Errorln("Error ws read")
 			return
 		}
 
@@ -82,7 +90,11 @@ func (w *WebSocket) ws(c *gin.Context) {
 			if err = wsConn.WriteMessage(websocket.TextMessage, []byte("bad request")); err != nil {
 				panic(err)
 			}
-			log.Println(err)
+			w.server.Log.WithFields(logrus.Fields{
+				"err":  err,
+				"time": time.Now().Format("2006-01-02 15:04:05"),
+			}).Error("Error ws read")
+			w.server.Log.Errorln(err)
 			continue
 		}
 
@@ -123,7 +135,9 @@ func (w *WebSocket) ws(c *gin.Context) {
 				if err = wsConn.WriteMessage(websocket.TextMessage, response); err != nil {
 					panic(err)
 				}
-				log.Println("no login")
+				w.server.Log.WithFields(logrus.Fields{
+					"time": time.Now().Format("2006-01-02 15:04:05"),
+				}).Infoln("no login")
 				return
 			}
 
@@ -171,7 +185,9 @@ func (w *WebSocket) ws(c *gin.Context) {
 				if err = wsConn.WriteMessage(websocket.TextMessage, response); err != nil {
 					panic(err)
 				}
-				log.Println("no login")
+				w.server.Log.WithFields(logrus.Fields{
+					"time": time.Now().Format("2006-01-02 15:04:05"),
+				}).Infoln("no login")
 				return
 			}
 

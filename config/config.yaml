@@ -9,7 +9,7 @@ websocket: 11882
 #本服务器的IP地址
 ip: 192.168.1.200
 #日志文件
-log_path: /log
+log_path: log
 #协议websocket或者字节流byte(默认)
 protocol:
 #日志保存最近天数,
